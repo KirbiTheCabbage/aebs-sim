@@ -1,13 +1,18 @@
-// aebs.rs
 
 // aebs.rs
 use crate::traits::Sensor;
+use std::collections::VecDeque;
+use std::collections::HashMap;
+use crate::sensors::LidarSensor;
+
 
 pub struct AebsSystem {
     pub active: bool,
     pub brake_level: u8,
     pub fault_detected: bool,
     pub sensors: Vec<Box<dyn Sensor>>,
+    pub sensor_data_history: HashMap<String, VecDeque<f32>>,
+    pub max_history: usize,
 }
 
 impl AebsSystem {
@@ -16,7 +21,9 @@ impl AebsSystem {
             active: true,
             brake_level: 0,
             fault_detected: false,
-            sensors: Vec::new(),
+            sensors: vec![],
+            sensor_data_history: HashMap::new(),
+            max_history: 100,
         }
     }
 
@@ -33,17 +40,35 @@ impl AebsSystem {
         let mut fault = false;
         let mut min_distance = f32::MAX;
 
-        for sensor in self.sensors.iter() {
-            if sensor.is_faulty() {
-                fault = true;
-                continue;
+
+        for sensor in &mut self.sensors {
+            if let Some(lidar) = sensor.as_any_mut().downcast_mut::<LidarSensor>() {
+                lidar.distance = (lidar.distance - 0.5).max(0.0);
             }
 
+            let name = sensor.name();
             let reading = sensor.read();
+
+            let history = self
+                .sensor_data_history
+                .entry(name.to_string())
+                .or_insert_with(|| VecDeque::with_capacity(self.max_history));
+
+            if history.len() >= self.max_history {
+                history.pop_front();
+            }
+
+            history.push_back(reading);
+
             if reading < min_distance {
                 min_distance = reading;
             }
+
+            if sensor.is_faulty() {
+                fault = true;
+            }
         }
+
 
         self.fault_detected = fault;
 

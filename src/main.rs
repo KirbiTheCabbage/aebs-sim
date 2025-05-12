@@ -6,6 +6,7 @@ mod aebs;
 use eframe::egui;
 use aebs::AebsSystem;
 use sensors::LidarSensor;
+use egui_plot::{Plot, PlotPoints, Line, Legend};
 
 struct DriverConsole {
     engine_on: bool,
@@ -49,14 +50,16 @@ impl eframe::App for DriverConsole {
             self.show_engine_controls(ui);
             self.show_speed_controls(ui);
             self.show_aebs_controls(ui);
+            egui::ScrollArea::vertical().show(ui,|ui|{
+                ui.separator();
+                ui.heading("AEBS Simulation Tools");
 
-            ui.separator();
-            ui.heading("AEBS Simulation Tools");
-
-            self.show_sensor_management(ui);
-            self.show_sensor_data(ui);
-            self.show_aebs_state(ui);
-            self.show_fault_injection(ui);
+                self.show_sensor_management(ui);
+                self.show_sensor_data(ui);
+                self.show_sensor_plot(ui);
+                self.show_aebs_state(ui);
+                self.show_fault_injection(ui);
+            });
         });
     }
 }
@@ -65,13 +68,13 @@ impl DriverConsole {
     fn show_engine_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui|{
             ui.label(format!("Engine: {}", if self.engine_on { "ON" } else { "OFF" }));
-            if ui.button(if self.engine_on { "Stop Engine" } else { "Start Engine" }).clicked() {
+            if ui.button(if self.engine_on { "Stop" } else { "Start" }).clicked() {
                 self.engine_on = !self.engine_on;
             }
         });
         ui.horizontal(|ui|{
             ui.label(format!("AEBS: {}", if self.aebs.active { "ON" } else { "OFF" }));
-            if ui.button(if self.aebs.active { "Stop Engine" } else { "Start Engine" }).clicked() {
+            if ui.button(if self.aebs.active { "Stop" } else { "Start" }).clicked() {
                 self.aebs.active = !self.aebs.active;
             }
         });
@@ -159,6 +162,35 @@ impl DriverConsole {
                         ui.label("Sample data..."); // Placeholder
                     });
                 }
+            }
+        });
+    }
+
+    fn show_sensor_plot(&mut self, ui: &mut egui::Ui) {
+        ui.group(|ui| {
+            ui.label("Sensor Data Graph");
+            
+            let available_size = ui.available_size();
+            let plot_width = available_size.x;
+            let plot_height = available_size.y * 0.2;
+
+            let plot_size = egui::vec2(plot_width,plot_width);
+
+            for (name, history) in &self.aebs.sensor_data_history {
+                let points: PlotPoints = history
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| [i as f64, *v as f64])
+                    .collect();
+
+                let line = Line::new(points).name(name.clone());
+
+                Plot::new(name.clone())
+                    .view_aspect(6.0)
+                    .legend(Legend::default())
+                    .show(ui, |plot_ui| {
+                        plot_ui.line(line);
+                    });
             }
         });
     }
